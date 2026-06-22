@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import routes from './routes';
+import healthRoutes from './routes/health';
+import statsRoutes from './routes/stats';
 
 const app: Application = express();
 
@@ -11,6 +13,8 @@ app.use(cors({ origin: true }));
 app.use(helmet());
 app.use(morgan('combined'));
 
+app.use('/api', healthRoutes);
+app.use('/api', statsRoutes);
 app.use('/api', routes);
 
 export default app;
