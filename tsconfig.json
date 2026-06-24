@@ -8,5 +8,17 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
-  }
+  },
+  "include": [
+    "src/app.ts",
+    "src/server.ts",
+    "src/middleware/rateLimiter.ts",
+    "src/data/mockData.ts",
+    "src/services/priceService.ts",
+    "src/routes/index.ts",
+    "src/routes/health.ts",
+    "src/routes/stats.ts",
+    "src/routes/rounds.ts",
+    "src/tests/hackathon.test.ts"
+  ]
 }
