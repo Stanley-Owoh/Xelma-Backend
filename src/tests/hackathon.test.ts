@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { getMockRounds, mockLeaderboard } from '../data/mockData';
-import { getPrices, resetPriceCache } from '../services/priceService';
+import { getPrices, getPriceSnapshot, resetPriceCache } from '../services/priceService';
 
 const COINGECKO_SAMPLE = {
   bitcoin: { usd: 67420 },
@@ -66,6 +66,27 @@ test('getPrices returns graceful failure when upstream is down and cache is empt
 
   try {
     await assert.rejects(() => getPrices(), /network error/);
+  } finally {
+    global.fetch = originalFetch;
+    resetPriceCache();
+  }
+});
+
+test('getPriceSnapshot exposes stale metadata for operators', async () => {
+  resetPriceCache();
+  process.env.ORACLE_STALENESS_THRESHOLD_MS = '60000';
+  const originalFetch = global.fetch;
+
+  global.fetch = (async () => ({
+    ok: true,
+    json: async () => COINGECKO_SAMPLE,
+  })) as unknown as typeof fetch;
+
+  try {
+    const snapshot = await getPriceSnapshot();
+    assert.strictEqual(snapshot.stale, false);
+    assert.strictEqual(typeof snapshot.lastUpdatedAt, 'string');
+    assert.strictEqual(snapshot.source, 'coingecko');
   } finally {
     global.fetch = originalFetch;
     resetPriceCache();

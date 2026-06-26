@@ -1,7 +1,5 @@
-import axios from 'axios';
 import logger from '../utils/logger';
 import { toDecimal, toNumber, toDecimalString } from '../utils/decimal.util';
-import { TimeoutResult, withTimeout } from '../utils/timeout-wrapper';
 import { CircuitBreaker, CircuitBreakerOpenError } from '../utils/circuit-breaker';
 import { Decimal } from '@prisma/client/runtime/library';
 import config from '../config';
@@ -9,23 +7,22 @@ import {
   priceOracleFetchFailuresTotal,
   priceOracleUpdatesTotal,
 } from '../metrics/application.metrics';
+import { fetchPricesWithFailover, resolvePriceProviders } from './price-providers';
 
 class PriceOracle {
   private static instance: PriceOracle;
   private price: Decimal | null = null;
-  private readonly COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd';
   private readonly POLLING_INTERVAL = config.oracle.pollingIntervalMs;
-  private readonly REQUEST_TIMEOUT = config.oracle.requestTimeoutMs;
-  private readonly MAX_RETRIES = config.oracle.maxRetries;
   private readonly STALENESS_THRESHOLD = config.oracle.stalenessThresholdMs;
   private readonly breaker = new CircuitBreaker({
-    name: 'coingecko-price-oracle',
+    name: 'price-oracle',
     failureThreshold: 3,
     openBackoffMs: 30_000,
   });
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private _running = false;
   private lastUpdatedAt: Date | null = null;
+  private activeSource: string | null = null;
 
   private constructor() {}
 
@@ -43,15 +40,14 @@ class PriceOracle {
     }
     this._running = true;
 
-    // Initial fetch
     this.fetchPrice();
-
-    // Start polling interval
     this.pollingInterval = setInterval(() => {
       this.fetchPrice();
     }, this.POLLING_INTERVAL);
 
-    logger.info('Price Oracle polling started');
+    logger.info('Price Oracle polling started', {
+      providers: resolvePriceProviders().map((provider) => provider.name),
+    });
   }
 
   public stopPolling(): void {
@@ -71,75 +67,33 @@ class PriceOracle {
   }
 
   private async fetchPrice(): Promise<void> {
-    let result: TimeoutResult<Decimal>;
-
     try {
-      result = await this.breaker.execute(async () => {
-        const timeoutResult = await withTimeout(
-          async () => {
-            const response = await axios.get(this.COINGECKO_URL, {
-              timeout: this.REQUEST_TIMEOUT,
-            });
-            const rawPrice = response.data?.stellar?.usd;
-            if (rawPrice !== undefined && rawPrice !== null) {
-              return toDecimal(rawPrice as string | number);
-            } else {
-              throw new Error('Invalid response structure from CoinGecko: missing stellar.usd');
-            }
-          },
-          {
-            timeoutMs: this.REQUEST_TIMEOUT,
-            operationName: 'fetchPriceFromCoinGecko',
-            retries: this.MAX_RETRIES,
-          }
-        );
+      const result = await this.breaker.execute(async () =>
+        fetchPricesWithFailover(resolvePriceProviders()),
+      );
 
-        if (!timeoutResult.success) {
-          throw timeoutResult.error ?? new Error('Failed to fetch price from CoinGecko');
-        }
-
-        return timeoutResult;
+      this.price = toDecimal(result.prices.XLM);
+      this.lastUpdatedAt = result.fetchedAt;
+      this.activeSource = result.source;
+      priceOracleUpdatesTotal.inc();
+      logger.info(`Fetched XLM price: $${toDecimalString(this.price)}`, {
+        source: result.source,
       });
     } catch (error) {
       if (error instanceof CircuitBreakerOpenError) {
-        logger.warn('Skipped CoinGecko price fetch because circuit breaker is open', {
+        logger.warn('Skipped price fetch because circuit breaker is open', {
           breaker: error.breakerName,
           nextAttemptAt: error.nextAttemptAt.toISOString(),
         });
         return;
       }
 
-      result = {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error)),
-        durationMs: 0,
-        retriesUsed: 0,
-        timedOut: error instanceof Error && error.message.includes('timeout'),
-      };
-    }
-
-    if (result.success && result.data) {
-      const fetchedPrice = result.data;
-      this.price = fetchedPrice;
-      this.lastUpdatedAt = new Date();
-      priceOracleUpdatesTotal.inc();
-      logger.info(`Fetched XLM price: $${toDecimalString(fetchedPrice)}`, {
-        durationMs: result.durationMs,
-        retriesUsed: result.retriesUsed,
-      });
-    } else {
       priceOracleFetchFailuresTotal.inc({
-        reason: result.timedOut ? 'timeout' : 'upstream_error',
+        reason: 'upstream_error',
       });
-      logger.error(
-        'Failed to fetch price from CoinGecko after retries',
-        {
-          error: result.error?.message,
-          durationMs: result.durationMs,
-          retriesUsed: result.retriesUsed,
-          timedOut: result.timedOut,
-        }
-      );
+      logger.error('Failed to fetch price from configured providers', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -162,6 +116,10 @@ class PriceOracle {
 
   public getLastUpdatedAt(): Date | null {
     return this.lastUpdatedAt;
+  }
+
+  public getActiveSource(): string | null {
+    return this.activeSource;
   }
 }
 

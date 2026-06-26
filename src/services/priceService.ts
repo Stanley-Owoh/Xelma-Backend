@@ -1,57 +1,25 @@
-export type AssetPrices = {
-  BTC: number;
-  ETH: number;
-  XLM: number;
-};
+import {
+  fetchPricesWithFailover,
+  resolvePriceProviders,
+} from './price-providers';
+import { AssetPrices } from './price-providers/types';
 
-const DEFAULT_COINGECKO_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,stellar&vs_currencies=usd';
+export type { AssetPrices } from './price-providers/types';
 
 const CACHE_TTL_MS = 30_000;
 
 type PriceCache = {
   prices: AssetPrices;
-  fetchedAt: number;
+  fetchedAt: Date;
+  source: string;
 };
 
 let cache: PriceCache | null = null;
 
-function getCoingeckoUrl(): string {
-  return process.env.COINGECKO_API_URL?.trim() || DEFAULT_COINGECKO_URL;
-}
-
-function mapCoingeckoResponse(data: unknown): AssetPrices {
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid CoinGecko response');
-  }
-
-  const payload = data as Record<string, { usd?: number } | undefined>;
-  const btc = payload.bitcoin?.usd;
-  const eth = payload.ethereum?.usd;
-  const xlm = payload.stellar?.usd;
-
-  if (
-    typeof btc !== 'number' ||
-    typeof eth !== 'number' ||
-    typeof xlm !== 'number'
-  ) {
-    throw new Error('CoinGecko response missing BTC, ETH, or XLM prices');
-  }
-
-  return { BTC: btc, ETH: eth, XLM: xlm };
-}
-
-async function fetchFromCoingecko(): Promise<AssetPrices> {
-  const response = await fetch(getCoingeckoUrl(), {
-    headers: { Accept: 'application/json' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`CoinGecko request failed with status ${response.status}`);
-  }
-
-  const data = await response.json();
-  return mapCoingeckoResponse(data);
+function getStalenessThresholdMs(): number {
+  const raw = process.env.ORACLE_STALENESS_THRESHOLD_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : 60_000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
 
 /** Clears the in-memory cache (for tests). */
@@ -59,27 +27,83 @@ export function resetPriceCache(): void {
   cache = null;
 }
 
+export function isPriceDataStale(lastUpdatedAt: Date | null): boolean {
+  if (!lastUpdatedAt) {
+    return true;
+  }
+  return Date.now() - lastUpdatedAt.getTime() > getStalenessThresholdMs();
+}
+
+export function getLastPriceUpdateAt(): Date | null {
+  return cache?.fetchedAt ?? null;
+}
+
+export function getActivePriceSource(): string | null {
+  return cache?.source ?? null;
+}
+
+export type PriceSnapshot = AssetPrices & {
+  stale: boolean;
+  lastUpdatedAt: string | null;
+  source: string | null;
+};
+
 /**
- * Returns BTC/ETH/XLM USD prices with a 30-second in-memory cache.
+ * Returns BTC/ETH/XLM USD prices with provider failover and a 30-second cache.
  * Serves stale cache on transient upstream failures when available.
  *
- * TODO: Replace CoinGecko with dedicated oracle service for production
+ * TODO: Replace CoinGecko with dedicated on-chain oracle for production settlement.
  */
 export async function getPrices(): Promise<AssetPrices> {
+  const snapshot = await getPriceSnapshot();
+  return {
+    BTC: snapshot.BTC,
+    ETH: snapshot.ETH,
+    XLM: snapshot.XLM,
+  };
+}
+
+export async function getPriceSnapshot(): Promise<PriceSnapshot> {
   const now = Date.now();
 
-  if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.prices;
+  if (cache && now - cache.fetchedAt.getTime() < CACHE_TTL_MS) {
+    return {
+      ...cache.prices,
+      stale: isPriceDataStale(cache.fetchedAt),
+      lastUpdatedAt: cache.fetchedAt.toISOString(),
+      source: cache.source,
+    };
   }
 
   try {
-    const prices = await fetchFromCoingecko();
-    cache = { prices, fetchedAt: now };
-    return prices;
+    const result = await fetchPricesWithFailover(resolvePriceProviders());
+    cache = {
+      prices: result.prices,
+      fetchedAt: result.fetchedAt,
+      source: result.source,
+    };
+    return {
+      ...result.prices,
+      stale: isPriceDataStale(result.fetchedAt),
+      lastUpdatedAt: result.fetchedAt.toISOString(),
+      source: result.source,
+    };
   } catch (error) {
     if (cache) {
-      return cache.prices;
+      return {
+        ...cache.prices,
+        stale: true,
+        lastUpdatedAt: cache.fetchedAt.toISOString(),
+        source: cache.source,
+      };
     }
     throw error;
+  }
+}
+
+/** Blocks settlement-sensitive flows when cached oracle data is too old. */
+export function assertFreshPricesForSettlement(): void {
+  if (isPriceDataStale(cache?.fetchedAt ?? null)) {
+    throw new Error('Price data is stale; settlement blocked');
   }
 }

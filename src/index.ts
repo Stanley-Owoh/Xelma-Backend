@@ -38,6 +38,7 @@ import corsDiagnosticsRoutes from './routes/admin-cors-diagnostics.routes';
 import deadLetterRoutes from './routes/admin-dead-letter.routes';
 import chatRoutes from './routes/chat.routes';
 import tournamentsRoutes from './routes/tournaments.routes';
+import pricesRoutes from './routes/prices';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './docs/openapi';
 import { initializeSocket } from './socket';
@@ -163,6 +164,7 @@ export function createApp(): Express {
    app.use('/api/chat', chatRoutes);
    app.use('/api/notifications', notificationsRoutes);
    app.use('/api/tournaments', tournamentsRoutes);
+   app.use('/api', pricesRoutes);
    app.use('/api/admin/metrics', adminMetricsRoutes);
    app.use('/api/errors', errorsRoutes);
    app.use('/api/admin/cors-diagnostics', corsDiagnosticsRoutes);
@@ -262,6 +264,7 @@ export function createApp(): Express {
          price_usd: price,
          stale: priceOracle.isStale(),
          lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
+         source: priceOracle.getActiveSource(),
          timestamp: new Date().toISOString(),
       });
    });
