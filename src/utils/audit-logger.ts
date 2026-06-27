@@ -566,6 +566,72 @@ class AuditLogger {
   }
 
   /**
+   * Log signature invalid (legacy/test support)
+   */
+  logSignatureInvalid(params: {
+    walletAddress: string;
+    reason: string;
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): void {
+    this.log({
+      eventType: AuditEventType.SIGNATURE_INVALID,
+      severity: AuditSeverity.WARNING,
+      message: 'Invalid wallet signature detected',
+      outcome: 'failure',
+      actor: {
+        type: 'anonymous',
+        walletAddress: params.walletAddress,
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent,
+      },
+      context: {
+        requestId: params.requestId,
+        endpoint: '/api/auth/connect',
+        method: 'POST',
+        timestamp: new Date().toISOString(),
+      },
+      metadata: {
+        failureReason: params.reason,
+      },
+    });
+  }
+
+  /**
+   * Log authentication failed (legacy/test support)
+   */
+  logAuthFailed(params: {
+    walletAddress: string;
+    reason: string;
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }): void {
+    this.log({
+      eventType: AuditEventType.AUTH_FAILED,
+      severity: AuditSeverity.ERROR,
+      message: 'Authentication failed',
+      outcome: 'failure',
+      actor: {
+        type: 'anonymous',
+        walletAddress: params.walletAddress,
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent,
+      },
+      context: {
+        requestId: params.requestId,
+        endpoint: '/api/auth/connect',
+        method: 'POST',
+        timestamp: new Date().toISOString(),
+      },
+      metadata: {
+        failureReason: params.reason,
+      },
+    });
+  }
+
+  /**
    * Sanitize actor information to remove sensitive data
    */
   private sanitizeActor(actor: AuditActor): AuditActor {

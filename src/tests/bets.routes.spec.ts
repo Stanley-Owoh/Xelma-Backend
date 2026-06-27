@@ -3,6 +3,8 @@ import request from "supertest";
 import { Express } from "express";
 import { createApp } from "../index";
 import sorobanService from "../services/soroban.service";
+import { UserRole } from "@prisma/client";
+import { generateToken } from "../utils/jwt.util";
 
 jest.mock("../services/soroban.service", () => {
   return {
@@ -19,10 +21,12 @@ const OTHER_ADDRESS = "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBZ
 
 describe("Bets Routes", () => {
   let app: Express;
+  let token: string;
   const originalEnv = process.env;
 
   beforeAll(() => {
     app = createApp();
+    token = generateToken("user-1", VALID_ADDRESS, UserRole.USER);
   });
 
   afterEach(() => {
@@ -52,6 +56,7 @@ describe("Bets Routes", () => {
 
       const res = await request(app)
         .post("/api/bets/up-down")
+        .set("Authorization", `Bearer ${token}`)
         .send({ address: VALID_ADDRESS, amount: 10, side: "UP" });
 
       expect(res.status).toBe(200);
@@ -70,6 +75,7 @@ describe("Bets Routes", () => {
 
       const res = await request(app)
         .post("/api/bets/up-down")
+        .set("Authorization", `Bearer ${token}`)
         .send({ address: VALID_ADDRESS, amount: 10, side: "UP" });
 
       expect(res.status).toBe(503);
@@ -114,6 +120,7 @@ describe("Bets Routes", () => {
 
       const res = await request(app)
         .post("/api/bets/precision")
+        .set("Authorization", `Bearer ${token}`)
         .send({ address: VALID_ADDRESS, amount: 5, predictedPrice: 0.12 });
 
       expect(res.status).toBe(200);
@@ -132,6 +139,7 @@ describe("Bets Routes", () => {
 
       const res = await request(app)
         .post("/api/bets/precision")
+        .set("Authorization", `Bearer ${token}`)
         .send({ address: VALID_ADDRESS, amount: 5, predictedPrice: 0.12 });
 
       expect(res.status).toBe(503);

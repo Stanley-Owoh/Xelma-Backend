@@ -10,8 +10,7 @@ export const upDownBetSchema = z.object({
   address: stellarAddressSchema,
   amount: z.number({ message: "amount is required" }).positive("amount must be a positive number"),
   side: z.enum(["UP", "DOWN"], {
-    required_error: "side is required",
-    invalid_type_error: "side must be UP or DOWN",
+    message: "side must be UP or DOWN",
   }),
 });
 

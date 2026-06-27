@@ -1,8 +1,21 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import axios from 'axios';
 import { Decimal } from '@prisma/client/runtime/library';
-import priceOracle from '../services/oracle';
+jest.mock('../config', () => {
+  const actualConfig = jest.requireActual('../config') as any;
+  return {
+    __esModule: true,
+    default: {
+      ...actualConfig.default,
+      oracle: {
+        ...actualConfig.default.oracle,
+        maxRetries: 1,
+      },
+    },
+  };
+});
 
+import priceOracle from '../services/oracle';
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
