@@ -29,6 +29,7 @@ import oracleService from './services/oracle.service';
 import logger from './utils/logger';
 import { validateVendoredBindings } from './utils/bindings-validator';
 import { errorHandler } from './middleware/errorHandler.middleware';
+import config from './config';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
 import metricsRoutes from './routes/metrics.routes';
@@ -115,6 +116,7 @@ assertPreflightOrExit();
 // Execute validation immediately
 validateEnv();
 logBindingsValidation();
+logger.info(`Active DATA_MODE=${config.app.dataMode}`);
 
 /**
  * Create and configure the Express app without starting any background

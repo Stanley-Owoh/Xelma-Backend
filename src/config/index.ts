@@ -14,6 +14,7 @@ export interface AppConfig {
   logLevel: string;
   apiOnly: boolean;
   roundsMockMode: boolean;
+  dataMode: "mock" | "live";
   enableSimulation: boolean;
 }
 
@@ -99,6 +100,7 @@ function buildConfig(): Config {
     ),
     apiOnly: v.boolean(env.API_ONLY, false),
     roundsMockMode: v.boolean(env.ROUNDS_MOCK_MODE, false),
+    dataMode: v.oneOf(env.DATA_MODE, "DATA_MODE", ["mock", "live"] as const, "live"),
     enableSimulation: v.boolean(env.ENABLE_SIMULATION, false),
   };
 
