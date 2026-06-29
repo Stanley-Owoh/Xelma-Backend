@@ -2,13 +2,14 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { betRateLimiter } from '../middleware/rateLimiter';
 import { validate } from '../middleware/validate.middleware';
 import { upDownBetSchema, precisionBetSchema } from '../schemas/bets.schema';
+
+import { getRepositories } from '../repositories';
 import config from '../config';
 import hackathonService from '../services/hackathon.service';
 import sorobanService from '../services/soroban.service';
 import { getMockRounds } from '../data/mockData';
 import { mapSorobanActiveRound } from '../utils/soroban-round.mapper';
 import logger from '../utils/logger';
-
 const router = Router();
 
 /**
@@ -37,6 +38,8 @@ const router = Router();
  */
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    const rounds = await getRepositories().rounds.listActiveRounds();
+    return res.json(rounds);
     if (!config.app.roundsMockMode) {
       try {
         const onChainRound = await sorobanService.getActiveRound();
@@ -67,7 +70,7 @@ router.post('/hackathon/up-down/:id/bet', betRateLimiter, validate(upDownBetSche
   try {
     const { id } = req.params;
     const { address, amount, side } = req.body;
-    await hackathonService.placeBet(id, address, amount, side);
+    await getRepositories().rounds.placeBet(id, address, amount, side);
     res.json({ success: true, message: 'Bet recorded (stub)' });
   } catch (err) {
     next(err);
@@ -78,7 +81,7 @@ router.post('/hackathon/precision/:id/bet', betRateLimiter, validate(precisionBe
   try {
     const { id } = req.params;
     const { address, amount, predictedPrice } = req.body;
-    await hackathonService.placeBet(id, address, amount, undefined, predictedPrice);
+    await getRepositories().rounds.placeBet(id, address, amount, undefined, predictedPrice);
     res.json({ success: true, message: 'Precision bet recorded (stub)' });
   } catch (err) {
     next(err);
