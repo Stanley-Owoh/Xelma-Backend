@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { betRateLimiter } from '../middleware/rateLimiter';
 import { validate } from '../middleware/validate.middleware';
 import { upDownBetSchema, precisionBetSchema } from '../schemas/bets.schema';
+import { sendSuccess } from '../utils/response';
 
 import { getRepositories } from '../repositories';
 import config from '../config';
@@ -39,13 +40,13 @@ const router = Router();
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const rounds = await getRepositories().rounds.listActiveRounds();
-    return res.json(rounds);
+    return sendSuccess(res, rounds);
     if (!config.app.roundsMockMode) {
       try {
         const onChainRound = await sorobanService.getActiveRound();
         if (onChainRound) {
           const mapped = mapSorobanActiveRound(onChainRound);
-          return res.json({ source: 'soroban', rounds: [mapped] });
+          return sendSuccess(res, { source: 'soroban', rounds: [mapped] });
         }
       } catch (err) {
         logger.warn('Soroban fetch failed; falling back to mock rounds', {
@@ -54,7 +55,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
       }
     }
 
-    return res.json({ source: 'mock', rounds: getMockRounds() });
+    return sendSuccess(res, { source: 'mock', rounds: getMockRounds() });
   } catch (err) {
     next(err);
   }
@@ -62,7 +63,7 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
 
 // TODO: Call contract via Xelma TypeScript bindings — bets must go on-chain; this endpoint is logging/analytics only for now
 router.post('/:id/bet', betRateLimiter, (_req, res) => {
-  res.json({ success: true, message: 'Bet recorded (stub)' });
+  sendSuccess(res, { message: 'Bet recorded (stub)' });
 });
 
 // Hackathon mutation endpoints - with Zod validation for consistent error handling
@@ -71,7 +72,7 @@ router.post('/hackathon/up-down/:id/bet', betRateLimiter, validate(upDownBetSche
     const { id } = req.params;
     const { address, amount, side } = req.body;
     await getRepositories().rounds.placeBet(id, address, amount, side);
-    res.json({ success: true, message: 'Bet recorded (stub)' });
+    sendSuccess(res, { message: 'Bet recorded (stub)' });
   } catch (err) {
     next(err);
   }
@@ -82,7 +83,7 @@ router.post('/hackathon/precision/:id/bet', betRateLimiter, validate(precisionBe
     const { id } = req.params;
     const { address, amount, predictedPrice } = req.body;
     await getRepositories().rounds.placeBet(id, address, amount, undefined, predictedPrice);
-    res.json({ success: true, message: 'Precision bet recorded (stub)' });
+    sendSuccess(res, { message: 'Precision bet recorded (stub)' });
   } catch (err) {
     next(err);
   }

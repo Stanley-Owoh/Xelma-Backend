@@ -58,13 +58,14 @@ describe('GET /api/rounds — Soroban-aware with mock fallback', () => {
     const res = await request(app).get('/api/rounds');
 
     expect(res.status).toBe(200);
-    expect(res.body.source).toBe('soroban');
-    expect(Array.isArray(res.body.rounds)).toBe(true);
-    expect(res.body.rounds).toHaveLength(1);
-    expect(res.body.rounds[0].sorobanRoundId).toBe('1');
-    expect(res.body.rounds[0].mode).toBe('UP_DOWN');
-    expect(res.body.rounds[0].status).toBe('ACTIVE');
-    expect(res.body.rounds[0].isSoroban).toBe(true);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.source).toBe('soroban');
+    expect(Array.isArray(res.body.data.rounds)).toBe(true);
+    expect(res.body.data.rounds).toHaveLength(1);
+    expect(res.body.data.rounds[0].sorobanRoundId).toBe('1');
+    expect(res.body.data.rounds[0].mode).toBe('UP_DOWN');
+    expect(res.body.data.rounds[0].status).toBe('ACTIVE');
+    expect(res.body.data.rounds[0].isSoroban).toBe(true);
   });
 
   it('falls back to mock rounds when soroban returns null', async () => {
@@ -73,9 +74,10 @@ describe('GET /api/rounds — Soroban-aware with mock fallback', () => {
     const res = await request(app).get('/api/rounds');
 
     expect(res.status).toBe(200);
-    expect(res.body.source).toBe('mock');
-    expect(Array.isArray(res.body.rounds)).toBe(true);
-    expect(res.body.rounds).toHaveLength(getMockRounds().length);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.source).toBe('mock');
+    expect(Array.isArray(res.body.data.rounds)).toBe(true);
+    expect(res.body.data.rounds).toHaveLength(getMockRounds().length);
     expect(mockGetActiveRound).toHaveBeenCalledTimes(1);
   });
 
@@ -85,18 +87,22 @@ describe('GET /api/rounds — Soroban-aware with mock fallback', () => {
     const res = await request(app).get('/api/rounds');
 
     expect(res.status).toBe(200);
-    expect(res.body.source).toBe('mock');
-    expect(Array.isArray(res.body.rounds)).toBe(true);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.source).toBe('mock');
+    expect(Array.isArray(res.body.data.rounds)).toBe(true);
   });
 
-  it('response always includes source and rounds fields', async () => {
+  it('response always uses envelope with success, data, source, and rounds', async () => {
     mockGetActiveRound.mockResolvedValueOnce(null);
 
     const res = await request(app).get('/api/rounds');
 
-    expect(res.body).toHaveProperty('source');
-    expect(res.body).toHaveProperty('rounds');
-    expect(['soroban', 'mock']).toContain(res.body.source);
+    expect(res.body).toHaveProperty('success');
+    expect(res.body).toHaveProperty('data');
+    expect(res.body.data).toHaveProperty('source');
+    expect(res.body.data).toHaveProperty('rounds');
+    expect(res.body.success).toBe(true);
+    expect(['soroban', 'mock']).toContain(res.body.data.source);
   });
 });
 
@@ -119,7 +125,8 @@ describe('GET /api/rounds — ROUNDS_MOCK_MODE=true skips Soroban', () => {
         .get('/api/rounds')
         .then((res: any) => {
           expect(res.status).toBe(200);
-          expect(res.body.source).toBe('mock');
+          expect(res.body.success).toBe(true);
+          expect(res.body.data.source).toBe('mock');
           expect(mockGetActiveRound).not.toHaveBeenCalled();
         });
     });
