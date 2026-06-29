@@ -491,6 +491,11 @@ docker compose --profile full up --build
 cp .env.example .env
 ```
 
+For hackathon/demo mode (mock data, minimal config):
+```bash
+cp .env.hackathon.example .env
+```
+
 ### 2. Configure Environment Variables
 
 ## Environment Variables
@@ -2009,6 +2014,12 @@ npx prisma migrate status
 
 This section is designed so a new developer can boot and test the API in minutes.
 
+> **Quickest start** — copy the hackathon env template for zero-config local setup:
+> ```bash
+> cp .env.hackathon.example .env
+> ```
+> Then skip straight to step 4 (migrations).
+
 ### 1. Setup
 
 ```bash
@@ -2020,7 +2031,7 @@ npm install
 docker compose up -d postgres
 
 # 2. Copy and customize your environment variables
-cp .env.example .env
+cp .env.hackathon.example .env
 # Edit .env → set DATABASE_URL and JWT_SECRET
 
 # 3. Generate Prisma client & apply core migrations
