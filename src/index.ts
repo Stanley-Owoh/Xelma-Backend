@@ -121,6 +121,11 @@ validateEnv();
 logBindingsValidation();
 logger.info(`Active DATA_MODE=${config.app.dataMode}`);
 
+const betStubMode = process.env.BET_STUB_MODE === "true";
+logger.info(`Bet mode: ${betStubMode ? "STUB (no on-chain calls)" : "ON-CHAIN (Soroban)"}`, {
+  BET_STUB_MODE: betStubMode,
+});
+
 /**
  * Create and configure the Express app without starting any background
  * jobs or binding to a network port. Safe to import in tests.

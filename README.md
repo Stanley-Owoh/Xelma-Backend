@@ -254,6 +254,16 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture decis
 > dedicated worker process runs background jobs while one or more
 > stateless processes serve HTTP — and for safer local debugging.
 
+> **Bet mode (`BET_STUB_MODE`)**: Controls whether `/api/bets` endpoints
+> submit transactions on-chain or just record intent locally.
+>
+> | `BET_STUB_MODE` | `sorobanService.placeBet` | `sorobanService.placePrecisionBet` | Use case |
+> |---|---|---|---|
+> | `true` (default) | Skipped | Skipped | Local dev, demos, hackathon — no Soroban keypairs or deployed contract needed |
+> | `false` | Called | Called | Production — bets are submitted to the Soroban smart contract |
+>
+> The active mode is logged at startup: `Bet mode: STUB (no on-chain calls)` or `Bet mode: ON-CHAIN (Soroban)`.
+
 #### **8a. Outbox Service (`outbox.service.ts`)** — Issue #18
 - **Purpose**: Guarantees at-least-once delivery of notification and WebSocket side-effects
 - **How it works**:
@@ -551,6 +561,9 @@ ROUND_SCHEDULER_MODE=UP_DOWN   # or 'LEGENDS'
 # API-only startup mode (skip oracle polling, schedulers, and price ticker)
 API_ONLY=false  # Set to 'true' to run as a stateless HTTP API only
 
+# Bet Mode: true = stub mode (records intent without on-chain calls), false = on-chain via Soroban
+BET_STUB_MODE=true
+
 # Price Oracle Configuration
 ORACLE_POLLING_INTERVAL_MS=10000    # Interval between price updates (ms)
 ORACLE_REQUEST_TIMEOUT_MS=5000     # Network timeout for requests (ms)
@@ -568,6 +581,12 @@ Operators can tune the oracle's behavior via environment variables to balance pr
 | `ORACLE_REQUEST_TIMEOUT_MS` | Network timeout for the API request. | `5000` (5s) |
 | `ORACLE_MAX_RETRIES` | Number of retry attempts on failure. | `3` |
 | `ORACLE_STALENESS_THRESHOLD_MS` | When to consider the local price data stale. | `60000` (60s) |
+
+#### Bet Mode (`BET_STUB_MODE`)
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `BET_STUB_MODE` | `true` = stub mode (bets recorded locally, no on-chain calls); `false` = bets submitted to Soroban smart contract | `true` |
 
 #### Database pool/timeout tuning
 
