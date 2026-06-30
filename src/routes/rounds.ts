@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { betRateLimiter } from '../middleware/rateLimiter';
 import { validate } from '../middleware/validate.middleware';
+import { sendSuccess } from '../utils/response';
 import { betSchema, upDownBetSchema, precisionBetSchema } from '../schemas/bets.schema';
 
 import { getRepositories } from '../repositories';
@@ -34,6 +35,23 @@ const router = Router();
  */
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    const rounds = await getRepositories().rounds.listActiveRounds();
+    return sendSuccess(res, rounds);
+    if (!config.app.roundsMockMode) {
+      try {
+        const onChainRound = await sorobanService.getActiveRound();
+        if (onChainRound) {
+          const mapped = mapSorobanActiveRound(onChainRound);
+          return sendSuccess(res, { source: 'soroban', rounds: [mapped] });
+        }
+      } catch (err) {
+        logger.warn('Soroban fetch failed; falling back to mock rounds', {
+          error: (err as Error).message,
+        });
+      }
+    }
+
+   // return sendSuccess(res, { source: 'mock', rounds: getMockRounds() });
     const { source, rounds } = await roundService.getRoundsForApi();
     return res.json({ source, rounds });
   } catch (err) {
@@ -52,7 +70,7 @@ router.post('/hackathon/up-down/:id/bet', betRateLimiter, validate(upDownBetSche
     const { id } = req.params;
     const { address, amount, side } = req.body;
     await getRepositories().rounds.placeBet(id, address, amount, side);
-    res.json({ success: true, message: 'Bet recorded (stub)' });
+    sendSuccess(res, { message: 'Bet recorded (stub)' });
   } catch (err) {
     next(err);
   }
@@ -63,7 +81,7 @@ router.post('/hackathon/precision/:id/bet', betRateLimiter, validate(precisionBe
     const { id } = req.params;
     const { address, amount, predictedPrice } = req.body;
     await getRepositories().rounds.placeBet(id, address, amount, undefined, predictedPrice);
-    res.json({ success: true, message: 'Precision bet recorded (stub)' });
+    sendSuccess(res, { message: 'Precision bet recorded (stub)' });
   } catch (err) {
     next(err);
   }

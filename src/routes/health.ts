@@ -6,6 +6,7 @@ import { checkRedisHealth } from '../lib/redis';
 import { withTimeout } from '../utils/timeout-wrapper';
 import logger from '../utils/logger';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
+import { sendSuccess } from '../utils/response';
 import config from '../config';
 
 const router = Router();
@@ -139,7 +140,7 @@ router.get(
       overallStatus = 'healthy';
     }
 
-    res.json({
+    sendSuccess(res, {
       status: overallStatus,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
