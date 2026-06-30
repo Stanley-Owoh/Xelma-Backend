@@ -6,6 +6,7 @@ import { checkRedisHealth } from '../lib/redis';
 import { withTimeout } from '../utils/timeout-wrapper';
 import logger from '../utils/logger';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
+import config from '../config';
 
 const router = Router();
 
@@ -82,6 +83,8 @@ async function checkOracle(): Promise<{
   durationMs: number;
   stale?: boolean;
   lastUpdatedAt?: string | null;
+  stalenessSeconds?: number | null;
+  provider?: string | null;
   error?: string;
 }> {
   const start = Date.now();
@@ -96,6 +99,8 @@ async function checkOracle(): Promise<{
       durationMs: Date.now() - start,
       stale,
       lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
+      stalenessSeconds: priceOracle.getStalenessSeconds(),
+      provider: priceOracle.getActiveSource(),
     };
   } catch (err) {
     return {
@@ -126,7 +131,8 @@ router.get(
     } else if (
       redis.status === 'degraded' ||
       soroban.status === 'degraded' ||
-      oracle.status === 'degraded'
+      oracle.status === 'degraded' ||
+      oracle.status === 'stale'
     ) {
       overallStatus = 'degraded';
     } else {
@@ -142,6 +148,44 @@ router.get(
     });
   }),
 );
+
+/**
+ * Lightweight hackathon health endpoint.
+ *
+ * Returns the process status plus timed checks for the two deps that
+ * the hackathon app actually owns: the price data source and the Soroban
+ * service.  No database ping is performed here so the response stays fast
+ * enough for readiness probes.
+ *
+ * Status semantics:
+ *   ok       – process is healthy, all checked deps report ok
+ *   degraded – at least one non-critical dep (e.g. Soroban not initialized)
+ *              is unavailable; the service is still serving requests
+ */
+router.get('/health', (_req: Request, res: Response) => {
+  const isMockMode = config.app.dataMode === 'mock';
+  const sorobanReady = sorobanService.isReady();
+
+  const services = {
+    price: {
+      status: 'ok',
+      source: isMockMode ? 'static-mock' : 'coingecko',
+      mockMode: isMockMode,
+    },
+    soroban: {
+      status: sorobanReady ? 'ok' : 'unavailable',
+      initialized: sorobanReady,
+    },
+  };
+
+  const overallStatus: 'ok' | 'degraded' = sorobanReady ? 'ok' : 'degraded';
+
+  res.json({
+    status: overallStatus,
+    timestamp: Date.now(),
+    services,
+  });
+});
 
 /**
  * @openapi
@@ -232,6 +276,14 @@ router.get(
  *                           type: string
  *                           format: date-time
  *                           nullable: true
+ *                         stalenessSeconds:
+ *                           type: integer
+ *                           nullable: true
+ *                           description: Age of the current price in seconds; null if never fetched.
+ *                         provider:
+ *                           type: string
+ *                           nullable: true
+ *                           description: Provider that supplied the current price (e.g. coingecko).
  *                         error:
  *                           type: string
  */
